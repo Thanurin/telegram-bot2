@@ -10,14 +10,14 @@ GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not TOKEN:
-    raise ValueError("BOT_TOKEN missing")
+    raise ValueError("BOT_TOKEN is missing")
 
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
 
 # ======================
-# HOME
+# HOME ROUTE
 # ======================
 @app.route("/", methods=["GET"])
 def home():
@@ -25,54 +25,49 @@ def home():
 
 
 # ======================
-# WEBHOOK
+# WEBHOOK ROUTE
 # ======================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
 
-    print("\n========== NEW UPDATE ==========")
+    print("\n=== NEW UPDATE ===")
     print(data)
 
     update = Update.de_json(data, bot)
 
     if not update.message:
-        print("NO MESSAGE FOUND")
         return "OK"
 
     msg = update.message
 
-    # ======================
-    # 🔥 AUTO SHOW CHAT ID (IMPORTANT)
-    # ======================
-    print("CHAT ID (USE THIS AS GROUP_ID):", msg.chat.id)
-    print("TEXT:", msg.text)
+    print("CHAT ID (USE THIS FOR GROUP_ID):", msg.chat.id)
+    print("MESSAGE:", msg.text)
 
-    # ======================
-    # TEST PRIVATE REPLY (CHECK BOT WORKS)
-    # ======================
+    # ----------------------
+    # TEST: reply to sender
+    # ----------------------
     try:
         bot.send_message(
             chat_id=msg.chat.id,
-            text="✅ BOT RECEIVED YOUR MESSAGE"
+            text="✅ Bot received your message"
         )
-        print("PRIVATE REPLY OK")
     except Exception as e:
-        print("PRIVATE ERROR:", repr(e))
+        print("PRIVATE SEND ERROR:", e)
 
-    # ======================
+    # ----------------------
     # FORWARD TO GROUPS
-    # ======================
+    # ----------------------
     for gid in GROUP_IDS:
         try:
-            print("TRY GROUP:", gid)
+            print("Sending to group:", gid)
 
-            result = bot.send_message(
+            bot.send_message(
                 chat_id=gid,
-                text=f"FORWARD: {msg.text}"
+                text=f"Forward: {msg.text}"
             )
 
-            print("SUCCESS GROUP:", gid, "MSG ID:", result.message_id)
+            print("SUCCESS GROUP:", gid)
 
         except Exception as e:
             print("FAILED GROUP:", gid)
@@ -82,15 +77,20 @@ def webhook():
 
 
 # ======================
-# START
+# START SERVER
 # ======================
 if __name__ == "__main__":
     print("BOT STARTED")
 
-    # SET WEBHOOK
+    # SAFE WEBHOOK SETUP (NO ASYNC ERROR)
     if WEBHOOK_URL:
         url = f"{WEBHOOK_URL}/webhook"
-        bot.set_webhook(url=url)
+
+        try:
+            bot.set_webhook(url=url)
+        except Exception as e:
+            print("Webhook error:", e)
+
         print("Webhook set:", url)
 
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
