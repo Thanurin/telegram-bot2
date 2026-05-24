@@ -3,21 +3,21 @@ from flask import Flask, request
 from telegram import Bot, Update
 
 # ======================
-# ENV VARIABLES
+# ENV
 # ======================
 TOKEN = os.getenv("BOT_TOKEN")
 GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not TOKEN:
-    raise ValueError("BOT_TOKEN is missing")
+    raise ValueError("BOT_TOKEN missing")
 
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
 
 # ======================
-# HEALTH CHECK
+# HOME
 # ======================
 @app.route("/", methods=["GET"])
 def home():
@@ -31,7 +31,7 @@ def home():
 def webhook():
     data = request.get_json(force=True)
 
-    print("========== NEW UPDATE ==========")
+    print("\n========== NEW UPDATE ==========")
     print(data)
 
     update = Update.de_json(data, bot)
@@ -42,41 +42,52 @@ def webhook():
 
     msg = update.message
 
-    text = msg.text or ""
+    # ======================
+    # 🔥 AUTO SHOW CHAT ID (IMPORTANT)
+    # ======================
+    print("CHAT ID (USE THIS AS GROUP_ID):", msg.chat.id)
+    print("TEXT:", msg.text)
 
-    print("MESSAGE:", text)
+    # ======================
+    # TEST PRIVATE REPLY (CHECK BOT WORKS)
+    # ======================
+    try:
+        bot.send_message(
+            chat_id=msg.chat.id,
+            text="✅ BOT RECEIVED YOUR MESSAGE"
+        )
+        print("PRIVATE REPLY OK")
+    except Exception as e:
+        print("PRIVATE ERROR:", repr(e))
 
+    # ======================
+    # FORWARD TO GROUPS
+    # ======================
     for gid in GROUP_IDS:
         try:
-            print("SENDING TO GROUP:", gid)
+            print("TRY GROUP:", gid)
 
-            if msg.text:
-                bot.send_message(chat_id=gid, text=text)
+            result = bot.send_message(
+                chat_id=gid,
+                text=f"FORWARD: {msg.text}"
+            )
 
-            elif msg.photo:
-                bot.send_photo(chat_id=gid, photo=msg.photo[-1].file_id)
-
-            elif msg.video:
-                bot.send_video(chat_id=gid, video=msg.video.file_id)
-
-            elif msg.document:
-                bot.send_document(chat_id=gid, document=msg.document.file_id)
-
-            print("SENT SUCCESS:", gid)
+            print("SUCCESS GROUP:", gid, "MSG ID:", result.message_id)
 
         except Exception as e:
-            print("SEND ERROR:", e)
+            print("FAILED GROUP:", gid)
+            print("ERROR:", repr(e))
 
     return "OK"
 
 
 # ======================
-# START APP
+# START
 # ======================
 if __name__ == "__main__":
     print("BOT STARTED")
 
-    # SET WEBHOOK AUTOMATICALLY
+    # SET WEBHOOK
     if WEBHOOK_URL:
         url = f"{WEBHOOK_URL}/webhook"
         bot.set_webhook(url=url)
