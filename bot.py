@@ -2,45 +2,44 @@ import os
 from flask import Flask, request
 from telegram import Bot, Update
 
-# =========================
-# ENV VARIABLES
-# =========================
+# ---------------- CONFIG ----------------
 TOKEN = os.getenv("BOT_TOKEN")
 GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x]
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not TOKEN:
-    raise ValueError("BOT_TOKEN is missing")
+    raise ValueError("BOT_TOKEN missing")
 
-# =========================
-# INIT
-# =========================
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
-# =========================
-# WEBHOOK ROUTE
-# =========================
+# ---------------- HEALTH CHECK ----------------
+@app.route("/", methods=["GET"])
+def home():
+    return "BOT IS RUNNING", 200
+
+
+# ---------------- WEBHOOK ----------------
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
-
-    print("INCOMING:", data)
-
     update = Update.de_json(data, bot)
 
     if update.message:
         msg = update.message
-        print("MESSAGE RECEIVED:", msg)
 
         for gid in GROUP_IDS:
             try:
-                # TEMP TEST MESSAGE
-                bot.send_message(
-                    chat_id=gid,
-                    text="TEST: message received"
-                )
-                print("SENT TO:", gid)
+                if msg.text:
+                    bot.send_message(chat_id=gid, text=msg.text)
+
+                elif msg.photo:
+                    bot.send_photo(chat_id=gid, photo=msg.photo[-1].file_id)
+
+                elif msg.video:
+                    bot.send_video(chat_id=gid, video=msg.video.file_id)
+
+                elif msg.document:
+                    bot.send_document(chat_id=gid, document=msg.document.file_id)
 
             except Exception as e:
                 print("SEND ERROR:", e)
@@ -48,30 +47,23 @@ def webhook():
     return "OK"
 
 
-# =========================
-# HEALTH CHECK
-# =========================
-@app.route("/", methods=["GET"])
-def home():
-    return "Bot is running"
+# ---------------- SET WEBHOOK ----------------
+def set_webhook():
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-
-# =========================
-# SET WEBHOOK ON START
-# =========================
-def setup_webhook():
     if WEBHOOK_URL:
         url = f"{WEBHOOK_URL}/webhook"
-        bot.set_webhook(url=url)
-        print("Webhook set to:", url)
+        bot.set_webhook(url=url)   # IMPORTANT: NOT async version
+        print("Webhook set:", url)
 
 
-# =========================
-# MAIN
-# =========================
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
     print("BOT STARTED")
 
-    setup_webhook()
+    set_webhook()
 
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", 10000))
+    )
