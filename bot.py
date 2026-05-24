@@ -1,16 +1,14 @@
 import os
+import requests
 from flask import Flask, request
 from telegram import Bot, Update
 
-# ======================
-# ENV
-# ======================
 TOKEN = os.getenv("BOT_TOKEN")
 GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x.strip()]
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not TOKEN:
-    raise ValueError("BOT_TOKEN is missing")
+    raise ValueError("Missing BOT_TOKEN")
 
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
@@ -25,14 +23,13 @@ def home():
 
 
 # ======================
-# WEBHOOK ROUTE
+# WEBHOOK
 # ======================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
 
-    print("\n=== NEW UPDATE ===")
-    print(data)
+    print("\nNEW UPDATE:", data)
 
     update = Update.de_json(data, bot)
 
@@ -41,56 +38,49 @@ def webhook():
 
     msg = update.message
 
-    print("CHAT ID (USE THIS FOR GROUP_ID):", msg.chat.id)
-    print("MESSAGE:", msg.text)
+    print("CHAT ID:", msg.chat.id)
+    print("TEXT:", msg.text)
 
-    # ----------------------
-    # TEST: reply to sender
-    # ----------------------
+    # reply test
     try:
-        bot.send_message(
-            chat_id=msg.chat.id,
-            text="✅ Bot received your message"
-        )
+        bot.send_message(chat_id=msg.chat.id, text="✅ Bot received your message")
     except Exception as e:
-        print("PRIVATE SEND ERROR:", e)
+        print("PRIVATE ERROR:", e)
 
-    # ----------------------
-    # FORWARD TO GROUPS
-    # ----------------------
+    # forward to group
     for gid in GROUP_IDS:
         try:
-            print("Sending to group:", gid)
+            print("SENDING TO:", gid)
 
             bot.send_message(
                 chat_id=gid,
                 text=f"Forward: {msg.text}"
             )
 
-            print("SUCCESS GROUP:", gid)
+            print("SUCCESS:", gid)
 
         except Exception as e:
-            print("FAILED GROUP:", gid)
-            print("ERROR:", repr(e))
+            print("FAILED:", gid, e)
 
     return "OK"
 
 
 # ======================
-# START SERVER
+# START
 # ======================
 if __name__ == "__main__":
     print("BOT STARTED")
 
-    # SAFE WEBHOOK SETUP (NO ASYNC ERROR)
+    # 🔥 SAFE WEBHOOK SET (NO ASYNC)
     if WEBHOOK_URL:
         url = f"{WEBHOOK_URL}/webhook"
 
         try:
-            bot.set_webhook(url=url)
+            requests.get(
+                f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={url}"
+            )
+            print("Webhook set:", url)
         except Exception as e:
             print("Webhook error:", e)
-
-        print("Webhook set:", url)
 
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
