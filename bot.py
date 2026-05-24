@@ -2,26 +2,36 @@ import os
 from flask import Flask, request
 from telegram import Bot, Update
 
-# ---------------- CONFIG ----------------
+# =====================
+# ENV VARIABLES
+# =====================
 TOKEN = os.getenv("BOT_TOKEN")
-GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x]
+GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x.strip()]
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not TOKEN:
-    raise ValueError("BOT_TOKEN missing")
+    raise ValueError("BOT_TOKEN is missing")
 
 bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
-# ---------------- HEALTH CHECK ----------------
+
+# =====================
+# HOME ROUTE (Render check)
+# =====================
 @app.route("/", methods=["GET"])
 def home():
-    return "BOT IS RUNNING", 200
+    return "Bot is running"
 
 
-# ---------------- WEBHOOK ----------------
+# =====================
+# WEBHOOK ROUTE
+# IMPORTANT: must match Telegram webhook URL
+# =====================
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
+
     update = Update.de_json(data, bot)
 
     if update.message:
@@ -47,23 +57,17 @@ def webhook():
     return "OK"
 
 
-# ---------------- SET WEBHOOK ----------------
-def set_webhook():
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-
-    if WEBHOOK_URL:
-        url = f"{WEBHOOK_URL}/webhook"
-        bot.set_webhook(url=url)   # IMPORTANT: NOT async version
-        print("Webhook set:", url)
-
-
-# ---------------- MAIN ----------------
+# =====================
+# START SERVER
+# =====================
 if __name__ == "__main__":
     print("BOT STARTED")
 
-    set_webhook()
+    # FIX: setWebhook must NOT be async
+    if WEBHOOK_URL:
+        url = f"{WEBHOOK_URL}/webhook"
+        bot.set_webhook(url=url)
+        print("Webhook set to:", url)
 
-    app.run(
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", 10000))
-    )
+    # IMPORTANT for Render
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
