@@ -2,8 +2,12 @@ import os
 from flask import Flask, request
 from telegram import Bot, Update
 
+# -------------------------
+# ENV VARIABLES
+# -------------------------
 TOKEN = os.getenv("BOT_TOKEN")
 GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x]
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 if not TOKEN:
     raise ValueError("BOT_TOKEN missing")
@@ -12,9 +16,9 @@ bot = Bot(token=TOKEN)
 app = Flask(__name__)
 
 # -------------------------
-# Telegram Webhook Route
+# WEBHOOK ROUTE
 # -------------------------
-@app.route(f"/{TOKEN}", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
 
@@ -25,26 +29,30 @@ def webhook():
 
         for gid in GROUP_IDS:
             try:
+                # TEXT
                 if msg.text:
                     bot.send_message(chat_id=gid, text=msg.text)
 
-                elif msg.photo:
+                # PHOTO
+                if msg.photo:
                     bot.send_photo(chat_id=gid, photo=msg.photo[-1].file_id)
 
-                elif msg.video:
+                # VIDEO
+                if msg.video:
                     bot.send_video(chat_id=gid, video=msg.video.file_id)
 
-                elif msg.document:
+                # DOCUMENT
+                if msg.document:
                     bot.send_document(chat_id=gid, document=msg.document.file_id)
 
             except Exception as e:
-                print("ERROR:", e)
+                print("ERROR SENDING:", e)
 
     return "OK"
 
 
 # -------------------------
-# Health check route (Render needs this)
+# HEALTH CHECK
 # -------------------------
 @app.route("/", methods=["GET"])
 def home():
@@ -52,16 +60,17 @@ def home():
 
 
 # -------------------------
-# MAIN
+# START SERVER
 # -------------------------
 if __name__ == "__main__":
     print("BOT STARTED")
 
-    # IMPORTANT: set webhook automatically
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-
+    # SET WEBHOOK AUTOMATICALLY
     if WEBHOOK_URL:
-        bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
-        print("Webhook set to:", f"{WEBHOOK_URL}/{TOKEN}")
+        url = f"{WEBHOOK_URL}/webhook"
+        result = bot.set_webhook(url=url)
+        print("Webhook set:", result)
+        print("Webhook URL:", url)
 
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+    port = int(os.getenv("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
