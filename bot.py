@@ -1,36 +1,67 @@
 import os
-from telegram import Update
-from telegram.ext import Application, MessageHandler, ContextTypes, filters
+from flask import Flask, request
+from telegram import Bot, Update
 
 TOKEN = os.getenv("BOT_TOKEN")
-
 GROUP_IDS = [int(x) for x in os.getenv("GROUP_ID", "").split(",") if x]
 
-async def forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.effective_message
-    if not msg:
-        return
+if not TOKEN:
+    raise ValueError("BOT_TOKEN missing")
 
-    for gid in GROUP_IDS:
-        try:
-            if msg.text:
-                await context.bot.send_message(gid, msg.text)
-            elif msg.photo:
-                await context.bot.send_photo(gid, msg.photo[-1].file_id)
-            elif msg.video:
-                await context.bot.send_video(gid, msg.video.file_id)
-            elif msg.document:
-                await context.bot.send_document(gid, msg.document.file_id)
-        except Exception as e:
-            print("ERROR:", e)
+bot = Bot(token=TOKEN)
+app = Flask(__name__)
 
-def main():
+# -------------------------
+# Telegram Webhook Route
+# -------------------------
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    data = request.get_json(force=True)
+
+    update = Update.de_json(data, bot)
+
+    if update.message:
+        msg = update.message
+
+        for gid in GROUP_IDS:
+            try:
+                if msg.text:
+                    bot.send_message(chat_id=gid, text=msg.text)
+
+                elif msg.photo:
+                    bot.send_photo(chat_id=gid, photo=msg.photo[-1].file_id)
+
+                elif msg.video:
+                    bot.send_video(chat_id=gid, video=msg.video.file_id)
+
+                elif msg.document:
+                    bot.send_document(chat_id=gid, document=msg.document.file_id)
+
+            except Exception as e:
+                print("ERROR:", e)
+
+    return "OK"
+
+
+# -------------------------
+# Health check route (Render needs this)
+# -------------------------
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running"
+
+
+# -------------------------
+# MAIN
+# -------------------------
+if __name__ == "__main__":
     print("BOT STARTED")
 
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.ALL, forward))
+    # IMPORTANT: set webhook automatically
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-    app.run_polling()
+    if WEBHOOK_URL:
+        bot.set_webhook(url=f"{WEBHOOK_URL}/{TOKEN}")
+        print("Webhook set to:", f"{WEBHOOK_URL}/{TOKEN}")
 
-if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
